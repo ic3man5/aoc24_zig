@@ -1,0 +1,32 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build: Zig Debug",
+            "type": "shell",
+            "command": "zig",
+            "args": ["build", "-Doptimize=Debug"], // add -Doptimize=ReleaseSafe or -Doptimize=ReleaseFast to optimize
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true,
+            }
+        },
+        {
+            "label": "Build: Zig Release Safe",
+            "type": "shell",
+            "command": "zig",
+            "args": ["build", "-Doptimize=ReleaseSafe"], // add -Doptimize=ReleaseSafe or -Doptimize=ReleaseFast to optimize
+            "problemMatcher": [],
+            "group": "build",
+        },
+        {
+            "label": "Build: Zig Release Fast",
+            "type": "shell",
+            "command": "zig",
+            "args": ["build", "-Doptimize=ReleaseFast"], // add -Doptimize=ReleaseSafe or -Doptimize=ReleaseFast to optimize
+            "problemMatcher": [],
+            "group": "build",
+        },
+    ]
+}

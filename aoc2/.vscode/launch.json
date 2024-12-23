@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Debug: Zig",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/zig-out/bin/${workspaceFolderBasename}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "preLaunchTask": "Build: Zig Debug",
+            "osx": { "MIMode": "lldb" },
+            "windows": {
+                "type": "cppvsdbg",
+                "console": "integratedTerminal",
+            },
+        },
+}
