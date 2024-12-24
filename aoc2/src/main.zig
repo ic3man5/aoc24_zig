@@ -20,39 +20,85 @@ pub fn main() !void {
     while (lines.next()) |line| {
         // strip return carriage if it exists
         const fixed_line = std.mem.trimRight(u8, line, "\r");
-        var levels_iter = std.mem.tokenizeScalar(u8, fixed_line, ' ');
-        var report = std.ArrayList(i64).init(allocator);
-        defer report.deinit();
-        while (levels_iter.next()) |level| {
-            try report.append(try std.fmt.parseInt(i64, level, 10));
+        // get all the values on the line
+        var line_items = std.mem.tokenizeScalar(u8, fixed_line, ' ');
+        var levels = std.ArrayList(i64).init(allocator);
+        defer levels.deinit();
+        while (line_items.next()) |item| {
+            try levels.append(try std.fmt.parseInt(i64, item, 10));
         }
-        total_reports += 1;
-        try reports.append(report);
-        const is_safe = checkIfSafe(std.ArrayList(i64), report);
-        if (!is_safe) {
+        const report = Report{ .levels = levels.items };
+        std.debug.print("Report: {any} {any}\n", .{ report.levels, report.getLevelType() });
+        if (!report.isSafe()) {
             unsafe_reports += 1;
         }
-        std.debug.print("{any} {} {}\n", .{ report.items, report.items.len, is_safe });
+        total_reports += 1;
+        //levels.deinit();
     }
     std.debug.print("Total reports: {}\tUnsafe: {}\tSafe: {}\n", .{ total_reports, unsafe_reports, total_reports - unsafe_reports });
 }
 
-pub fn checkIfSafe(comptime T: type, items: T) bool {
-    var last_value = items.items[0];
-    const increasing = (last_value - items.items[1]) < 0;
-    for (items.items[2..]) |item| {
-        const value = last_value - item;
-        // The levels are either all increasing or all decreasing.
-        if (increasing and value > 0) {
-            return false;
-        } else if (!increasing and value < 0) {
-            return false;
+pub fn contains(comptime T: type, haystack: []T, needle: T) bool {
+    for (haystack) |item| {
+        if (item == needle) {
+            return true;
         }
-        // Any two adjacent levels differ by at least one and at most three.
-        if (@abs(value) < 1 and @abs(value) > 3) {
-            return false;
-        }
-        last_value = item;
     }
-    return true;
+    // std.debug.print("DEBUG: {} not in {any}\t", .{ needle, haystack });
+    return false;
 }
+
+const LevelType = union(enum) {
+    Safe,
+    UnsafeIncrease: u64,
+    UnsafeDecrease: u64,
+    UnsafeNoChange: u64,
+    UnsafeRange: u64,
+    UnsafeNotEnoughLevels,
+};
+
+const Report = struct {
+    levels: []i64,
+
+    pub fn isSafe(self: *const Report) bool {
+        return try self.getLevelType() == .Safe;
+    }
+
+    pub fn getLevelType(self: *const Report) !LevelType {
+        var last_value: ?i64 = null;
+        var is_increasing: ?bool = null;
+        for (self.levels, 0..) |level, i| {
+            // Set the last value to compare if we are the first
+            if (last_value == null) {
+                last_value = level;
+                continue;
+            }
+            // Get the difference in the levels, negative = increasing level.
+            const diff: i64 = last_value.? - level;
+            last_value = level;
+            if (diff == 0) {
+                return LevelType{ .UnsafeNoChange = i };
+            }
+            if (is_increasing == null) {
+                // An increasing level will have a negative value and decreasing will be negative.
+                is_increasing = diff < 0;
+            }
+            // The levels are either all increasing or all decreasing.
+            if (diff < 0 and !is_increasing.?) {
+                return LevelType{ .UnsafeDecrease = i };
+            } else if (diff > 0 and is_increasing.?) {
+                return LevelType{ .UnsafeIncrease = i };
+            }
+            // Any two adjacent levels differ by at least one and at most three.
+            if (!contains(u64, @constCast(&[_]u64{ 1, 2, 3 }), @abs(diff))) {
+                return LevelType{ .UnsafeRange = i };
+            }
+        }
+        // Something went wrong if we couldn't assign these variables.
+        if (is_increasing == null or last_value == null) {
+            return LevelType.UnsafeNotEnoughLevels;
+        }
+        // We made it, winner winner chicken dinner!
+        return LevelType.Safe;
+    }
+};
