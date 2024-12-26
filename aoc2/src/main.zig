@@ -60,14 +60,20 @@ const LevelType = union(enum) {
 const Report = struct {
     levels: []i64,
 
-    pub fn isSafe(self: *const Report) bool {
+    const Self = @This();
+
+    pub fn isSafe(self: *const Self) bool {
         return try self.getLevelType() == .Safe;
     }
 
-    pub fn getLevelType(self: *const Report) !LevelType {
+    pub fn getLevelType(self: *const Self) !LevelType {
+        return Self.levelTypeOfSlice(@TypeOf(self.levels[0]), self.levels);
+    }
+
+    pub fn levelTypeOfSlice(comptime T: type, levels: []const T) !LevelType {
         var last_value: ?i64 = null;
         var is_increasing: ?bool = null;
-        for (self.levels, 0..) |level, i| {
+        for (levels, 0..) |level, i| {
             // Set the last value to compare if we are the first
             if (last_value == null) {
                 last_value = level;
