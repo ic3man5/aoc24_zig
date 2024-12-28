@@ -49,11 +49,12 @@ pub fn contains(comptime T: type, haystack: []T, needle: T) bool {
 }
 
 const LevelType = union(enum) {
-    Safe,
+    Safe: bool,
     UnsafeIncrease: u64,
     UnsafeDecrease: u64,
     UnsafeNoChange: u64,
     UnsafeRange: u64,
+    UnsafeChange,
     UnsafeNotEnoughLevels,
 };
 
@@ -70,41 +71,56 @@ const Report = struct {
         return Self.levelTypeOfSlice(@TypeOf(self.levels[0]), self.levels);
     }
 
+    pub fn isLevelSafe(comptime T: type, first: T, second: T, index: u64) LevelType {
+        var is_increasing: bool = false;
+        if (first < second) {
+            is_increasing = true;
+        } else if (first > second) {
+            is_increasing = false;
+        } else {
+            return LevelType{ .UnsafeNoChange = index };
+        }
+        const diff = @abs(first - second);
+        // Any two adjacent levels differ by at least one and at most three.
+        if (!contains(u64, @constCast(&[_]u64{ 1, 2, 3 }), diff)) {
+            return LevelType{ .UnsafeRange = index };
+        }
+        return LevelType{ .Safe = is_increasing };
+    }
+
     pub fn levelTypeOfSlice(comptime T: type, levels: []const T) !LevelType {
-        var last_value: ?i64 = null;
+        var skipped_one = false;
+        var level_type: ?LevelType = null;
         var is_increasing: ?bool = null;
-        for (levels, 0..) |level, i| {
-            // Set the last value to compare if we are the first
-            if (last_value == null) {
-                last_value = level;
-                continue;
+        // We have to use a while loop because a for loop makes i const and we can't skip
+        var i: usize = 0;
+        while (i < levels.len) : (i += 1) {
+            if (i + 1 >= levels.len) {
+                break;
             }
-            // Get the difference in the levels, negative = increasing level.
-            const diff: i64 = last_value.? - level;
-            last_value = level;
-            if (diff == 0) {
-                return LevelType{ .UnsafeNoChange = i };
+            level_type = Self.isLevelSafe(T, levels[i], levels[i + 1], @intCast(i));
+            if (level_type.? == .Safe) {
+                // We need to make sure the Increase/Decrease isn't changing
+                if (is_increasing == null) {
+                    is_increasing = level_type.?.Safe;
+                } else if (is_increasing.? != level_type.?.Safe) {
+                    level_type = LevelType.UnsafeChange;
+                }
             }
-            if (is_increasing == null) {
-                // An increasing level will have a negative value and decreasing will be negative.
-                is_increasing = diff < 0;
-            }
-            // The levels are either all increasing or all decreasing.
-            if (diff < 0 and !is_increasing.?) {
-                return LevelType{ .UnsafeDecrease = i };
-            } else if (diff > 0 and is_increasing.?) {
-                return LevelType{ .UnsafeIncrease = i };
-            }
-            // Any two adjacent levels differ by at least one and at most three.
-            if (!contains(u64, @constCast(&[_]u64{ 1, 2, 3 }), @abs(diff))) {
-                return LevelType{ .UnsafeRange = i };
+            // the reactor safety systems tolerate a single bad level
+            if (level_type.? != .Safe) {
+                if (skipped_one) {
+                    return level_type.?;
+                } else {
+                    skipped_one = true;
+                    i += 1;
+                    continue;
+                }
             }
         }
-        // Something went wrong if we couldn't assign these variables.
-        if (is_increasing == null or last_value == null) {
+        if (level_type == null) {
             return LevelType.UnsafeNotEnoughLevels;
         }
-        // We made it, winner winner chicken dinner!
-        return LevelType.Safe;
+        return level_type.?;
     }
 };
